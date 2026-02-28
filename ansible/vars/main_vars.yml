@@ -1,0 +1,27 @@
+---
+# ============================================================
+# Storage configuration
+# ============================================================
+hdd:
+  pool_name: DockerPool
+
+
+# ============================================================
+# System admin user
+# ============================================================
+# This user must already exist on the target host.
+# It will be added to the `docker` group.
+adminuser: user
+
+
+# ============================================================
+# Docker configuration
+# ============================================================
+docker:
+  external_network: net_proxy
+  data_dir: "/{{ hdd.pool_name }}/docker/data"
+  env_dest: "/{{ hdd.pool_name }}/docker/.env"
+
+  # Container runtime identity — used for file ownership inside containers
+  PUID: 1000
+  PGID: 1000

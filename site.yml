@@ -1,0 +1,17 @@
+---
+- name: Install and configure Docker on AlmaLinux 9
+  hosts: docker_hosts
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ansible/vars/main_vars.yml
+    - ansible/vars/secret_vars.yml   # ansible-vault encrypted secrets (create separately)
+
+  tasks:
+    - name: Import Docker installation tasks
+      ansible.builtin.import_tasks: ansible/tasks/main.yml
+
+  handlers:
+    - name: Import handlers
+      ansible.builtin.import_tasks: ansible/handlers/main.yml

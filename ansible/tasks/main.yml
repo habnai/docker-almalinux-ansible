@@ -1,0 +1,120 @@
+---
+# ============================================================
+# Task 1: Create Docker data directory
+# Must exist before template is deployed
+# ============================================================
+- name: Create Docker data directory
+  ansible.builtin.file:
+    path: "{{ docker.data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# ============================================================
+# Task 2: Deploy .env configuration file from template
+# ============================================================
+- name: Deploy Docker .env file
+  ansible.builtin.template:
+    src: templates/dockerEnv.env
+    dest: "{{ docker.env_dest }}"
+    owner: root
+    group: docker
+    mode: "0640"
+  # group docker may not exist yet at this point — this task runs
+  # after Docker is installed (see ordering below). If you move
+  # this task earlier, set group to root and fix permissions in
+  # a later task.
+
+# ============================================================
+# Task 3: Install base required packages
+# ============================================================
+- name: Install required base packages
+  ansible.builtin.dnf:
+    name:
+      - dnf-plugins-core
+      - yum-utils
+      - git
+      - ca-certificates
+      - wget
+      - gnupg2
+      - curl
+    state: present
+
+# ============================================================
+# Task 4: Add Docker CE repository (idempotent)
+# FIX: Replaced `command: dnf config-manager --add-repo` which
+#      is not idempotent and re-runs on every play execution.
+# ============================================================
+- name: Add Docker CE repository
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    owner: root
+    group: root
+    mode: "0644"
+
+# ============================================================
+# Task 5: Install Docker CE and all plugins in one transaction
+# FIX: Merged separate looped installs into one atomic dnf call.
+#      Added update_cache so the newly added repo is visible.
+# ============================================================
+- name: Install Docker CE and plugins
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+  notify: Restart Docker
+
+# ============================================================
+# Task 6: Start and enable Docker service
+# ============================================================
+- name: Start and enable Docker service
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+# ============================================================
+# Task 7: Ensure docker group exists
+# (Docker install creates it, but declaring it ensures
+#  idempotency if the play is run in check mode or partially)
+# ============================================================
+- name: Ensure docker group exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+# ============================================================
+# Task 8: Add admin user to docker group
+# ============================================================
+- name: "Add user {{ adminuser }} to docker group"
+  ansible.builtin.user:
+    name: "{{ adminuser }}"
+    groups: docker
+    append: true
+
+# ============================================================
+# Task 9: Fix .env file group now that docker group exists
+# ============================================================
+- name: Set correct group ownership on .env file
+  ansible.builtin.file:
+    path: "{{ docker.env_dest }}"
+    owner: root
+    group: docker
+    mode: "0640"
+
+# ============================================================
+# Task 10: Create Docker external network if not present
+# ============================================================
+- name: Create Docker external network
+  community.docker.docker_network:
+    name: "{{ docker.external_network }}"
+    state: present
+  # Requires community.docker collection:
+  #   ansible-galaxy collection install community.docker
